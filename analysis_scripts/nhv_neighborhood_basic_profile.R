@@ -177,4 +177,18 @@ out_df <- out %>%
   rename(topic = displayTopic)
 
 jsonlite::write_json(out_df, str_glue("./to_viz/new_haven_data_{acs_year}.json"))
-write_csv(out_df, str_glue("./to_distribute/new_haven_acs_basic_neighborhood_{acs_year}.csv"), na = "")
+
+
+prof_wide <- out_df %>%
+  select(-topic, -city, -type:-suborder) %>%
+  rename(name = neighborhood) %>%
+  arrange(geoType, name) %>%
+  mutate_at(vars(name, indicator), as_factor) %>%
+  distinct(name, indicator, .keep_all = T) %>%
+  group_by(indicator) %>%
+  mutate(row = row_number()) %>%
+  spread(key = indicator, value = value) %>%
+  select(-row) %>%
+  select(geoType, name, everything())
+
+write_csv(prof_wide, str_glue("./to_distribute/new_haven_acs_basic_neighborhood_{acs_year}.csv"), na = "")

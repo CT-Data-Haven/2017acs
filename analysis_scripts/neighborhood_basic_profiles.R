@@ -198,8 +198,23 @@ hartford <- bind_rows(
   select(-city)
 
 # WRITE JSON FILES FOR WEB
-lst(bridgeport, stamford, hartford) %>%
+prof_list <- lst(bridgeport, stamford, hartford) %>%
   map(~select(., -topic) %>% rename(topic = displayTopic)) %>%
   imap(~mutate(.x, city = str_to_title(.y))) %>%
-  iwalk(~jsonlite::write_json(.x, str_glue("./to_viz/{.y}_data_{acs_year}.json"))) %>%
+  iwalk(~jsonlite::write_json(.x, str_glue("./to_viz/{.y}_data_{acs_year}.json")))
+
+prof_wide <- prof_list %>%
+  map(function(df) {
+    df %>%
+      select(-topic, -city, -type:-suborder) %>%
+      rename(name = neighborhood) %>%
+      arrange(geoType, name) %>%
+      mutate_at(vars(name, indicator), as_factor) %>%
+      distinct(name, indicator, .keep_all = T) %>%
+      group_by(indicator) %>%
+      mutate(row = row_number()) %>%
+      spread(key = indicator, value = value) %>%
+      select(-row) %>%
+      select(geoType, name, everything())
+  }) %>%
   iwalk(~write_csv(.x, str_glue("./to_distribute/{.y}_acs_basic_neighborhood_{acs_year}.csv"), na = ""))
