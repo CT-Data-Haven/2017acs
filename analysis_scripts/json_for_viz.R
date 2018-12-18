@@ -35,4 +35,7 @@ json %>%
   nest() %>%
   write_json("./to_viz/nhood_data.json")
 
-write_json(meta, "./to_viz/nhood_meta.json")
+meta %>%
+  group_by(topic, displayTopic) %>%
+  nest() %>%
+  write_json("./to_viz/nhood_meta.json")
