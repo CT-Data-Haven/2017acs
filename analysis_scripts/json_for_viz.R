@@ -1,5 +1,9 @@
 library(tidyverse)
 library(jsonlite)
+library(cwi)
+library(sf)
+library(geojsonio)
+library(rmapshaper)
 
 json <- list.files(path = "./to_viz", pattern = "data_\\d+\\.json", full.names = T) %>%
   set_names(str_extract(., "\\w+(?=_data)")) %>%
@@ -39,3 +43,56 @@ meta %>%
   group_by(topic, displayTopic) %>%
   nest() %>%
   write_json("./to_viz/nhood_meta.json")
+
+
+
+# make topojson
+bpt <- bridgeport_sf %>%
+  ms_simplify(keep = 0.05, keep_shapes = T) %>%
+  as_Spatial() %>%
+  geojson::as.geojson() %>% 
+  apply_mapshaper_commands(data = ., command = "-clean", force_FC = T, sys = T) %>%
+  geojson_sf() %>%
+  select(-rmapshaperid)
+
+nhv <- new_haven_sf %>%
+  ms_simplify(keep = 0.5, keep_shapes = T) %>%
+  as_Spatial() %>%
+  geojson::as.geojson() %>% 
+  apply_mapshaper_commands(data = ., command = "-clean", force_FC = T, sys = T) %>%
+  geojson_sf() %>%
+  select(-rmapshaperid)
+
+stam <- stamford_sf %>% 
+  ms_simplify(keep = 0.25, keep_shapes = T)
+  
+geos <- list(
+  bridgeport = bpt, 
+  new_haven = nhv, 
+  hartford = hartford_sf, 
+  stamford = stam
+)
+
+geo_out <- geos %>% 
+  map(st_transform, 4326) %>%
+  imap(function(df, cty) {
+    if ("town" %in% names(df)) {
+      df
+    } else {
+      df %>% mutate(town = str_replace_all(cty, "_", " ") %>% str_to_title())
+    }
+  }) %>%
+  map(arrange, town, name) %>%
+  iwalk(~geojsonio::topojson_write(.x, geometry = "polygon", 
+                                  group = "town", 
+                                  object_name = .y,
+                                  file = sprintf("to_viz/%s_topo.json", .y)))
+
+geo_out %>%
+  imap(~mutate(.x, city = .y)) %>%
+  reduce(rbind) %>%
+  topojson_write(geometry = "polygon", group = "city", object_name = "cities",
+                 file = "to_viz/topo_all.json")
+
+# mapshaper -i combine-files to_viz/*_topo.json -o to_viz/topo_all.json
+# system("mapshaper -i combine-files to_viz/*_topo.json -o to_viz/topo_all.json")
