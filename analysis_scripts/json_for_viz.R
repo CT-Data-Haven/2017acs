@@ -28,20 +28,37 @@ meta <- json[[1]] %>%
            str_replace("estimate", "num")) %>%
   select(order, suborder, topic, displayTopic, indicator, displayIndicator, type, format)
 
-json %>%
+wide <- json %>%
   bind_rows(.id = "name") %>%
-  select(name:value, town) %>%
+  select(city = name, town, name = neighborhood, geoType, topic, indicator, value) %>%
   rename(displayIndicator = indicator, displayTopic = topic) %>%
   left_join(meta, by = c("displayTopic", "displayIndicator")) %>%
   select(-starts_with("display"), -matches("order"), -type, -format) %>%
-  rename(city = name, name = neighborhood) %>%
-  group_by(city, topic, indicator) %>%
+  mutate(indicator = as_factor(indicator)) %>%
+  group_by(city, topic) %>%
   nest() %>%
-  write_json("./to_viz/nhood_data.json")
+  mutate(data = map(data, ~spread(., key = indicator, value = value))) %>%
+  split(.$city) %>%
+  map(select, -city)
+
+write_json(wide, "./to_viz/nhood_data_wide.json")
+
+
+# json %>%
+#   bind_rows(.id = "name") %>%
+#   select(name:value, town) %>%
+#   rename(displayIndicator = indicator, displayTopic = topic) %>%
+#   left_join(meta, by = c("displayTopic", "displayIndicator")) %>%
+#   select(-starts_with("display"), -matches("order"), -type, -format) %>%
+#   rename(city = name, name = neighborhood) %>%
+#   group_by(city, topic, indicator) %>%
+#   nest() %>%
+#   write_json("./to_viz/nhood_data.json")
 
 meta %>%
-  group_by(topic, displayTopic) %>%
-  nest() %>%
+  arrange(topic, displayTopic) %>%
+  # group_by(topic, displayTopic) %>%
+  # nest() %>%
   write_json("./to_viz/nhood_meta.json")
 
 
@@ -83,10 +100,10 @@ geo_out <- geos %>%
     }
   }) %>%
   map(arrange, town, name) %>%
-  iwalk(~geojsonio::topojson_write(.x, geometry = "polygon", 
-                                  group = "town", 
-                                  object_name = .y,
-                                  file = sprintf("to_viz/%s_topo.json", .y)))
+  imap(~mutate(.x, city = .y)) %>%
+  iwalk(~topojson_write(.x, geometry = "polygon", group = "city",
+                        object_name = "city", 
+                        file = sprintf("to_viz/%s_topo.json", .y)))
 
 geo_out %>%
   imap(~mutate(.x, city = .y)) %>%
@@ -96,3 +113,5 @@ geo_out %>%
 
 # mapshaper -i combine-files to_viz/*_topo.json -o to_viz/topo_all.json
 # system("mapshaper -i combine-files to_viz/*_topo.json -o to_viz/topo_all.json")
+
+

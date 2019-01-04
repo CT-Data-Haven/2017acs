@@ -188,3 +188,5 @@ prof_done <- cws_df %>%
 write_csv(prof_done, str_glue("output/5year{acs_year}town_profile_expanded_CWS.csv"), na = "")
 
 saveRDS(out_df, str_glue("output/acs_town_basic_profile_{acs_year}.rds"))
+
+write_csv(out_df, str_glue("output/acs_town_basic_profile_{acs_year}.csv"))
